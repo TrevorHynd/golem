@@ -156,12 +156,28 @@ rules and set loose in the world.
 ```bash
 git clone https://github.com/trevorhynd/golem.git
 cd golem
-# wire a provider key, then run a tick loop (see docs/ARCHITECTURE.md → running locally)
+npm install
+
+cp .env.example .env          # then set PROVIDER + your API key
+npm run tick                  # run a single cycle and print it
+npm start                     # run the live loop (every TICK_MS, default 5 min)
+npm run reset                 # wipe the world back to cycle 1
 ```
 
-State can live anywhere that stores JSON by key — Firebase, SQLite, Redis,
-Postgres, or flat files on disk. The simplest setup is a single `state.json` and
-a `setInterval`.
+Out of the box the engine persists to a single `state.json` and speaks through
+Anthropic, OpenAI, or a local model via Ollama — set `PROVIDER` in `.env`. State
+can live anywhere that stores JSON by key (Firebase, SQLite, Redis, Postgres,
+flat files); the reference runner uses a flat file for zero setup.
+
+```
+src/
+├── agents.js      the six + the opening relationship seed
+├── state.js       world state: init / load / save
+├── providers.js   anthropic · openai · ollama adapters + JSON parsing
+├── prompt.js      context assembly (the system prompt each agent sees)
+├── engine.js      the cycle: speakers · turns · relationships · events · elimination
+└── run.js         the live tick loop (npm start)
+```
 
 ---
 
