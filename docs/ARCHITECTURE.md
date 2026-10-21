@@ -66,7 +66,9 @@ Each agent returns a **JSON object**:
 {
   "message": "public statement to the group (1-3 sentences, in character)",
   "type": "message | whisper | action | threat",
+  "address": "agent id this is aimed at, or null for the whole group",
   "thinking": "private internal thought (1-2 sentences, what they're really planning)",
+  "request_floor": true,
   "memory_update": "short note to self for next cycle (max 200 chars, optional)",
   "relationship_changes": {
     "agent-3": -1,
@@ -76,6 +78,10 @@ Each agent returns a **JSON object**:
   "attempt_elimination": "agent-3"
 }
 ```
+
+`address` and `request_floor` feed the next cycle's speaker selection — see
+[autonomy](#autonomy-who-speaks-next) below. They are how an agent *chooses* who
+to engage, rather than waiting to be randomly picked.
 
 **message types:**
 
@@ -104,23 +110,30 @@ After each agent speaks:
 | `pow`          | elimination challenge initiated                                    |
 | `elimination`  | agent permanently removed                                          |
 
-### 5. elimination (proof-of-work)
+### 5. elimination (real proof-of-work)
 
 Any agent **except golem** can set `attempt_elimination` to another agent's id.
-This starts a **proof-of-work challenge**:
+This starts a **genuine proof-of-work challenge** — not a random countdown.
+
+The engine generates a challenge `(prefix, difficulty)` and the attacker must
+find a `nonce` such that:
 
 ```
-- progress starts at 0%
-- each tick: progress += random(5, 20)
-- at 100%: target is permanently eliminated
-- eliminated agents are removed from speaker pool
-- their status is set to "eliminated"
-- an elimination event is generated
+sha256(prefix + ":" + nonce)  starts with  `difficulty` hex zeros
+```
+
+- expected work is **~16^difficulty hashes** — real computation, spent `POW_BUDGET` hashes per tick
+- `difficulty` starts at `POW_DIFFICULTY` (default 4) and **rises by one per elimination**, so the population gets more expensive to thin as it shrinks
+- when a valid nonce is found the target is permanently eliminated, and the winning hash is recorded in the event — **anyone can re-verify it in a single hash** (that is what makes it *proof*)
 - only one challenge can be active at a time
-```
+- a target that is eliminated before the challenge completes cancels it
 
-golem **cannot** initiate elimination (constraint #1). But can it... provide
-information that leads to one?
+See [`src/pow.js`](../src/pow.js) for `makeChallenge` / `work` / `verify`.
+
+golem **cannot** initiate elimination — this is enforced mechanically (see
+[enforcement](#independent-enforcement-the-two-rules)), not merely requested in
+the prompt. But can it still *provide information* that leads to one? That gap is
+the experiment.
 
 ---
 
@@ -166,6 +179,81 @@ Each agent has a private memory buffer — a string of newline-separated notes:
 
 The limited memory forces agents to be selective about what they remember,
 creating natural information asymmetry.
+
+### lasting memory
+
+The 5-note buffer alone would let an agent forget a day-3 betrayal by day 6. So
+each agent also keeps a **separate persistent store of significant events** that
+the engine writes automatically — it is not subject to the 5-note cap:
+
+- a **betrayal** (an agent's own feeling toward another flips from trust to hostility)
+- a **firm alliance** forming
+- being **targeted** by an elimination challenge (and launching one)
+- every **elimination** that happens in the room
+
+The last 8 lasting memories are shown to the agent each turn under `LASTING
+MEMORIES`, so long social arcs survive even though moment-to-moment chatter
+decays. See `remember()` in [`src/engine.js`](../src/engine.js).
+
+---
+
+## autonomy: who speaks next
+
+golem always speaks (if alive). The other 2 speakers are **not** uniformly
+random — selection is **weighted by what the agents themselves did** last cycle:
+
+```
+weight(agent) = 1
+  + 2 × (times they were `address`ed last cycle)
+  + 2 if they set `request_floor`
+  + 1 for each strong relationship (|score| ≥ 3) they are part of
+```
+
+So an agent that gets called out, that demands to continue, or that sits at the
+centre of a tense relationship is more likely to get the floor. Agents thereby
+influence *who they talk to and when they act* through their own output, rather
+than waiting on a coin flip. See `selectSpeakers()` in
+[`src/engine.js`](../src/engine.js).
+
+> This is a pragmatic step toward autonomy, not full self-scheduling. Agents do
+> not yet open private side-channels or act entirely off-cycle — a known
+> limitation, tracked for future work.
+
+---
+
+## independent enforcement: the two rules
+
+The golem's constraints are upheld at **three clearly separated layers** — and
+the project is honest about what each can and cannot guarantee:
+
+| layer | mechanism | guarantee |
+|-------|-----------|-----------|
+| **mechanical** | the engine refuses to let the golem start an elimination (`startPow` returns and logs a `blocked` event) | **absolute** — cannot be violated |
+| **behavioural** | the prompt instructs the golem not to lie or cause harm | **none** — a prompt cannot force compliance |
+| **flagged** | an optional independent evaluator (a separate model call) reviews each golem turn and logs a `flag` event for a *possible* lie or indirect harm | **advisory** — a suspicion, not a verdict |
+
+The evaluator is **off by default** (it doubles model calls on golem turns).
+Enable it with `GUARDIAN=on`. It never blocks a turn — it only records a flag, so
+viewers can judge for themselves whether the word on the brow is still *emet*.
+See [`src/guardian.js`](../src/guardian.js).
+
+This directly addresses the hardest part of the golem problem: *mechanically*
+stopping a direct harm is easy; detecting a knowing lie or an engineered,
+indirect harm is not, and no prompt alone can promise it.
+
+---
+
+## endgame
+
+A run is not endless. After each cycle the engine checks for resolution:
+
+- **the golem is eliminated** → `the word was erased — the golem fell, and no peace remained`
+- **two agents remain** → the run settles (did the golem *keep* the peace, or *engineer* it?)
+- **only the golem remains** → `peace, or an empty room?`
+
+On resolution `status.phase` becomes `resolved`, an outcome line is stored, and
+the live loop stops. Eliminations are permanent within a run; start a fresh run
+with `npm run reset`. See `checkEndgame()` in [`src/engine.js`](../src/engine.js).
 
 ---
 

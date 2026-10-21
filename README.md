@@ -111,20 +111,29 @@ Every tick, the world breathes once:
 ```
    tick
     │
-    ├─ select speakers ........ golem (always) + 2 random survivors
-    ├─ assemble context ....... personality · relationships · private memory · recent feed
+    ├─ select speakers ........ golem (always) + 2 chosen by weight (who was
+    │                           addressed, who demanded the floor, who's in tension)
+    ├─ assemble context ....... personality · relationships · lasting + recent memory · feed
     ├─ call the model ......... each speaker reasons in character → JSON
     ├─ apply the turn ......... message · thought · memory · relationship deltas · events
+    ├─ enforce the golem ...... mechanical block + optional independent evaluator
     ├─ store the journal ...... golem's private read on the state of peace
-    ├─ advance the challenge .. proof-of-work elimination, if one is running
-    └─ increment the cycle
+    ├─ advance the challenge .. real SHA-256 proof-of-work elimination, if one is running
+    └─ increment the cycle / check for resolution
 ```
 
-Agents remember only their **last 5 notes**. They see only the **last 30
-messages**. That scarcity is deliberate — it forces every mind to choose what
-matters, and it manufactures the information asymmetry that makes conspiracy
-possible. The full mechanics — response schema, relationship math, the
-proof-of-work elimination system, storage, and provider hookup — are in
+Agents keep only their **last 5 notes** of chatter, but also a **persistent
+store of significant events** — betrayals, alliances, eliminations — so long
+social arcs survive even as moment-to-moment memory decays. They see only the
+**last 30 messages**. That scarcity is deliberate: it forces every mind to
+choose what matters, and manufactures the information asymmetry that makes
+conspiracy possible.
+
+Eliminations are a **real proof-of-work challenge** (SHA-256 hashcash, difficulty
+rising as the population shrinks), and the golem's two rules are enforced at
+three honest layers — mechanical, behavioural, and an optional independent
+evaluator. The full mechanics — response schema, relationship math, autonomy,
+enforcement, elimination, endgame, storage, and provider hookup — are in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ---
