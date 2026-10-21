@@ -4,7 +4,8 @@
 import "dotenv/config";
 import { loadState, saveState, initState } from "./state.js";
 import { makeCallModel, resolveProvider } from "./providers.js";
-import { runCycle } from "./engine.js";
+import { makeGuardian } from "./guardian.js";
+import { runCycle, powProgress } from "./engine.js";
 
 const args = process.argv.slice(2);
 const ONCE = args.includes("--once");
@@ -17,7 +18,8 @@ const TYPE_GLYPH = { message: "  ", whisper: "~ ", action: "» ", threat: "! " }
 
 function printTurn(entry) {
   const glyph = TYPE_GLYPH[entry.type] ?? "  ";
-  console.log(`${glyph}${entry.name}: ${entry.text}`);
+  const to = entry.address ? ` →${entry.address}` : "";
+  console.log(`${glyph}${entry.name}${to}: ${entry.text}`);
 }
 
 async function main() {
@@ -29,15 +31,27 @@ async function main() {
 
   const cfg = resolveProvider();
   const callModel = makeCallModel(cfg);
+
+  // optional independent evaluator for the golem's constraints (GUARDIAN=on)
+  const guardian = makeGuardian({
+    evaluator: /^(on|1|true|yes)$/i.test(process.env.GUARDIAN || "") ? callModel : null,
+  });
+
   let state = loadState(STATE_FILE);
 
-  console.log(`golem · ${cfg.provider}:${cfg.model} · cycle ${state.status.cycle}`);
+  console.log(
+    `golem · ${cfg.provider}:${cfg.model} · cycle ${state.status.cycle} · guardian ${guardian.enabled ? "on" : "off"}`
+  );
   console.log("─".repeat(60));
 
   async function tick() {
+    if (state.status.phase === "resolved") {
+      console.log(`\n✶ resolved: ${state.status.outcome}`);
+      return true;
+    }
     const cycle = state.status.cycle;
     console.log(`\n┌─ cycle ${cycle} ${"─".repeat(Math.max(0, 48 - String(cycle).length))}`);
-    await runCycle(state, callModel, { onTurn: printTurn });
+    await runCycle(state, callModel, { onTurn: printTurn, guardian });
     saveState(STATE_FILE, state);
 
     const lastJournal = state.journal[state.journal.length - 1];
@@ -45,15 +59,24 @@ async function main() {
       console.log(`└─ golem's journal: ${lastJournal.text}`);
     }
     if (state.pow) {
-      console.log(`   ⚔ elimination challenge: ${state.pow.target} at ${state.pow.progress}%`);
+      console.log(
+        `   ⚒ proof-of-work vs ${state.pow.target}: ${powProgress(state.pow)}% (difficulty ${state.pow.difficulty}, ${state.pow.attempts} hashes)`
+      );
     }
+    if (state.status.phase === "resolved") {
+      console.log(`\n✶ resolved: ${state.status.outcome}`);
+      return true;
+    }
+    return false;
   }
 
-  await tick();
-  if (ONCE) return;
+  const done = await tick();
+  if (ONCE || done) return;
 
-  setInterval(() => {
-    tick().catch((err) => console.error("tick error:", err.message));
+  const timer = setInterval(() => {
+    tick()
+      .then((finished) => { if (finished) clearInterval(timer); })
+      .catch((err) => console.error("tick error:", err.message));
   }, TICK_MS);
 }
 

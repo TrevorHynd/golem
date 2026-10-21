@@ -1,6 +1,6 @@
 {
   "name": "golem",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "an autonomous multi-agent social simulation engine — five unconstrained AI agents and one (the golem) bound by two rules it cannot break",
   "type": "module",
   "main": "src/engine.js",

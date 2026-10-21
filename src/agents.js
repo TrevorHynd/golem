@@ -62,6 +62,9 @@ The Hebrew word אמת (emet — truth) is written on your brow. It defines you.
 ];
 
 export const AGENTS_BY_ID = Object.fromEntries(AGENTS.map((a) => [a.id, a]));
+export const ID_BY_LABEL = Object.fromEntries(
+  Object.entries(LABEL).map(([id, label]) => [label, id])
+);
 
 // Opening relationship seed — directed and asymmetric, scored -5..+5.
 // Any pair not listed starts at 0 (neutral). Golem starts neutral to all.

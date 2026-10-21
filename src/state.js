@@ -9,16 +9,20 @@ export function initState() {
     status: {
       cycle: 1,
       eliminated: 0,
+      phase: "running", // "running" | "resolved"
+      outcome: null, // set when resolved
     },
     agents: Object.fromEntries(
       AGENTS.map((a) => [a.id, { id: a.id, name: a.name, status: "active" }])
     ),
     relationships: seedRelationships(),
-    memory: Object.fromEntries(AGENTS.map((a) => [a.id, ""])),
-    feed: [], // { id, name, text, type, cycle, thinking, ts }
+    memory: Object.fromEntries(AGENTS.map((a) => [a.id, ""])), // rolling: last 5 notes
+    longterm: Object.fromEntries(AGENTS.map((a) => [a.id, ""])), // persistent: significant events
+    feed: [], // { id, name, text, type, cycle, thinking, address, ts }
     events: [], // { type, text, cycle, ts }
     journal: [], // { text, cycle, ts }  (golem only)
-    pow: null, // { attacker, target, progress } | null
+    pow: null, // { attacker, target, difficulty, prefix, attempts, solution } | null
+    signals: { addressed: {}, floor: [] }, // autonomy hints for next speaker selection
   };
 }
 

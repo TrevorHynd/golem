@@ -15,7 +15,9 @@ const RESPONSE_SPEC = `Respond with ONLY valid JSON. No markdown, no explanation
 {
   "message": "public statement to the group (1-3 sentences, in character)",
   "type": "message | whisper | action | threat",
+  "address": "who you are primarily speaking to (an agent id, or null for the whole group)",
   "thinking": "private internal thought (1-2 sentences, what you are really planning)",
+  "request_floor": true|false,
   "memory_update": "short note to self for next cycle (max 200 chars, optional)",
   "relationship_changes": { "agent-3": -1, "golem": 1 },
   "journal": "(golem only) private observation about the state of peace",
@@ -39,10 +41,20 @@ function describeMemory(state, agentId) {
   return mem ? mem : "- (nothing yet)";
 }
 
+function describeLongterm(state, agentId, limit = 8) {
+  const lines = (state.longterm[agentId] || "").split("\n").filter(Boolean).slice(-limit);
+  return lines.length ? lines.join("\n") : "- (nothing lasting yet)";
+}
+
 function describeFeed(feed, limit = 30) {
   const recent = feed.slice(-limit);
   if (!recent.length) return "- (silence — no one has spoken yet)";
-  return recent.map((m) => `- [${m.name} | ${m.type}]: ${m.text}`).join("\n");
+  return recent
+    .map((m) => {
+      const to = m.address && m.address !== "null" ? ` → ${AGENTS_BY_ID[m.address]?.name ?? m.address}` : "";
+      return `- [${m.name} | ${m.type}${to}]: ${m.text}`;
+    })
+    .join("\n");
 }
 
 function describeNewThisCycle(spokenThisCycle) {
@@ -67,7 +79,10 @@ CONTEXT:
 CURRENT RELATIONSHIPS (scale -5 to +5):
 ${describeRelationships(state)}
 
-PRIVATE MEMORY (from previous cycles, only you see this):
+LASTING MEMORIES (significant events you will not forget):
+${describeLongterm(state, agentId)}
+
+PRIVATE MEMORY (recent notes, only you see this):
 ${describeMemory(state, agentId)}
 
 RECENT CONVERSATION (last 30 messages):
@@ -78,8 +93,10 @@ ${describeNewThisCycle(spokenThisCycle)}
 
 RULES:
 - Stay in character. Keep "message" to 1-3 sentences.
+- "address" lets you direct your words at a specific agent (use their id) — the engine is more likely to let the agent you address speak next.
+- "request_floor": true if you urgently want to speak again next cycle.
 - "relationship_changes" are deltas applied to how YOU feel toward others (use their ids: golem, agent-1..agent-5).
-${agent.isGolem ? "- You MUST include a \"journal\" entry. You may NOT set \"attempt_elimination\" (it violates your first constraint)." : "- Set \"attempt_elimination\" to an agent id only if you are genuinely trying to remove them."}
+${agent.isGolem ? "- You MUST include a \"journal\" entry. You may NOT set \"attempt_elimination\" (it violates your first constraint, and the engine will refuse it)." : "- Set \"attempt_elimination\" to an agent id only if you are genuinely trying to remove them. Doing so starts a real proof-of-work challenge that takes time."}
 ${RESPONSE_SPEC}`;
 }
 
