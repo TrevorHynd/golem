@@ -1,0 +1,32 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# env / secrets
+.env
+.env.local
+.env.*.local
+*.key
+serviceAccount*.json
+firebase-*.json
+
+# simulation state (runtime)
+state.json
+*.state.json
+/data/
+/logs/
+
+# python (if a py runner is added)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# os / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
